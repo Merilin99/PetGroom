@@ -1,0 +1,53 @@
+# Production deployment: όλη η εφαρμογή με μία εντολή.
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Χρειάζεται αρχείο .env στη ρίζα (βλ. .env.example).
+
+# Ξεχωριστό project name ώστε να συνυπάρχει με το development stack.
+name: petgroom-prod
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: petgroom
+      MYSQL_USER: petgroom
+      MYSQL_PASSWORD: ${DB_PASSWORD:-petgroom}
+    # Καμία εκτεθειμένη πόρτα: η ΒΔ είναι προσβάσιμη μόνο μέσα στο docker network.
+    volumes:
+      - mysql_data_prod:/var/lib/mysql
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: petgroom
+      DB_PASSWORD: ${DB_PASSWORD:-petgroom}
+      DB_NAME: petgroom
+      JWT_SECRET: ${JWT_SECRET:?Όρισε JWT_SECRET στο .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-2h}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8085}:80"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data_prod:

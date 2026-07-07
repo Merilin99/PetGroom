@@ -1,0 +1,321 @@
+{
+  "info": {
+    "name": "PetGroom API",
+    "description": "Integration tests για το PetGroom API (Τελικό Project Coding Factory 10).\n\nΡοή πελάτη: εγγραφή → σύνδεση → κατοικίδιο → διαθεσιμότητα → κράτηση → ακύρωση.\n\nΠΡΟΫΠΟΘΕΣΕΙΣ: τρέχει το backend (npm run dev) και η ΒΔ, και υπάρχει τουλάχιστον ένας χρήστης GROOMER (βλ. README, ενότητα «Ρόλοι χρηστών»).\n\nΤρέξε τα requests με τη σειρά (ή όλα μαζί με το Collection Runner) — κάθε βήμα αποθηκεύει ό,τι χρειάζεται το επόμενο σε collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "email", "value": "" },
+    { "key": "petId", "value": "" },
+    { "key": "serviceId", "value": "" },
+    { "key": "groomerId", "value": "" },
+    { "key": "date", "value": "" },
+    { "key": "slot", "value": "" },
+    { "key": "appointmentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - Health check",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "url": "{{baseUrl}}/api/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Το API απαντά', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Εγγραφή πελάτη",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"postman123\",\n  \"firstName\": \"Πελάτης\",\n  \"lastName\": \"Postman\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "pm.collectionVariables.set('email', `postman-${Date.now()}@test.gr`);"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Δημιουργήθηκε (201)', () => pm.response.to.have.status(201));",
+              "pm.test('Ρόλος CUSTOMER', () => pm.expect(pm.response.json().role).to.eql('CUSTOMER'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Σύνδεση",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"postman123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Επιτυχής σύνδεση (200)', () => pm.response.to.have.status(200));",
+              "pm.test('Επιστρέφει token', () => pm.expect(pm.response.json().token).to.be.a('string'));",
+              "pm.collectionVariables.set('token', pm.response.json().token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Το προφίλ μου",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Προφίλ ΟΚ (200)', () => pm.response.to.have.status(200));",
+              "pm.test('Σωστό email', () => pm.expect(pm.response.json().email).to.eql(pm.collectionVariables.get('email')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Κατάλογος υπηρεσιών",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "url": "{{baseUrl}}/api/services"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Λίστα ΟΚ (200)', () => pm.response.to.have.status(200));",
+              "const services = pm.response.json();",
+              "pm.test('Υπάρχουν υπηρεσίες', () => pm.expect(services.length).to.be.above(0));",
+              "pm.collectionVariables.set('serviceId', services[0].id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Νέο κατοικίδιο",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/pets",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Αζόρ\",\n  \"species\": \"DOG\",\n  \"breed\": \"Ημίαιμο\",\n  \"size\": \"MEDIUM\",\n  \"notes\": \"Δημιουργήθηκε από το Postman\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Δημιουργήθηκε (201)', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('petId', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Τα κατοικίδιά μου",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/pets"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Λίστα ΟΚ (200)', () => pm.response.to.have.status(200));",
+              "pm.test('Περιέχει το νέο κατοικίδιο', () => {",
+              "  const ids = pm.response.json().map(p => p.id);",
+              "  pm.expect(ids).to.include(Number(pm.collectionVariables.get('petId')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Λίστα groomers",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/users/groomers"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Λίστα ΟΚ (200)', () => pm.response.to.have.status(200));",
+              "const groomers = pm.response.json();",
+              "pm.test('Υπάρχει τουλάχιστον ένας groomer (αλλιώς βλ. README > Ρόλοι χρηστών)', () => pm.expect(groomers.length).to.be.above(0));",
+              "if (groomers.length > 0) pm.collectionVariables.set('groomerId', groomers[0].id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Διαθέσιμες ώρες",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/appointments/availability?groomerId={{groomerId}}&serviceId={{serviceId}}&date={{date}}"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const t = new Date(Date.now() + 24 * 60 * 60 * 1000);",
+              "pm.collectionVariables.set('date', t.toISOString().slice(0, 10));"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Διαθεσιμότητα ΟΚ (200)', () => pm.response.to.have.status(200));",
+              "const slots = pm.response.json().slots;",
+              "pm.test('Υπάρχουν ελεύθερες ώρες', () => pm.expect(slots.length).to.be.above(0));",
+              "if (slots.length > 0) pm.collectionVariables.set('slot', slots[0]);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Κράτηση ραντεβού",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/appointments",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"petId\": {{petId}},\n  \"serviceId\": {{serviceId}},\n  \"groomerId\": {{groomerId}},\n  \"startsAt\": \"{{date}} {{slot}}\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Κράτηση ΟΚ (201)', () => pm.response.to.have.status(201));",
+              "pm.test('Κατάσταση PENDING', () => pm.expect(pm.response.json().status).to.eql('PENDING'));",
+              "pm.collectionVariables.set('appointmentId', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Επικαλυπτόμενη κράτηση (πρέπει να αποτύχει)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/appointments",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"petId\": {{petId}},\n  \"serviceId\": {{serviceId}},\n  \"groomerId\": {{groomerId}},\n  \"startsAt\": \"{{date}} {{slot}}\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Απορρίφθηκε ως επικάλυψη (409)', () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Τα ραντεβού μου",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/appointments"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Λίστα ΟΚ (200)', () => pm.response.to.have.status(200));",
+              "pm.test('Περιέχει τη νέα κράτηση', () => {",
+              "  const ids = pm.response.json().map(a => a.id);",
+              "  pm.expect(ids).to.include(Number(pm.collectionVariables.get('appointmentId')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Ακύρωση ραντεβού",
+      "request": {
+        "method": "PATCH",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": "{{baseUrl}}/api/appointments/{{appointmentId}}/status",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"CANCELLED\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Ακυρώθηκε (200)', () => pm.response.to.have.status(200));",
+              "pm.test('Κατάσταση CANCELLED', () => pm.expect(pm.response.json().status).to.eql('CANCELLED'));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
